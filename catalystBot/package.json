@@ -1,0 +1,25 @@
+{
+  "name": "CatalystBot",
+  "version": "1.0.0",
+  "description": "A Catalyst Bot for Slack",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "keywords": [
+    "slack",
+    "integration"
+  ],
+  "repository": {},
+  "bugs": {},
+  "author": "Naresh Parimi <naresh.parimi@relevancelab.com>",
+  "license": "RelevanceLab",
+  "dependencies": {
+    "axios": "^0.14.0",
+    "body-parser": "^1.16.1",
+    "dotenv": "^4.0.0",
+    "express": "^4.14.0",
+    "request": "^2.79.0",
+    "moment": "^2.17.1",
+    "express-slack": "^1.0.9"
+  }
+}

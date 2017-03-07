@@ -1,0 +1,25 @@
+{
+  "name": "servicenow-bot-example",
+  "version": "1.0.0",
+  "description": "A ServiceNow Bot example for Slack",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "keywords": [
+    "slack",
+    "bot",
+    "integration",
+    "example",
+    "tutorial"
+  ],
+  "repository": {
+  },
+  "bugs": {
+  },
+  "author": "John Agan <jagan@slack-corp.com>",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.14.0",
+    "body-parser": "^1.16.1"
+  }
+}

@@ -1,0 +1,10 @@
+*~
+*#
+.#*
+\#*#
+.*.sw[a-z]
+*.un~
+pkg/
+
+node_modules/
+*.log
