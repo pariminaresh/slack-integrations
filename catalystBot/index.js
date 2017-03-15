@@ -13,6 +13,7 @@ const server = app.listen(3003, () => {
 	 	app.settings.env);
 });
 
+//This API is to support Slack application OAUTH
 app.get('/auth/redirect', (req, res) =>{
     var options = {
         uri: 'https://slack.com/api/oauth.access?code='
@@ -34,24 +35,33 @@ app.get('/auth/redirect', (req, res) =>{
     })
 })
 
+//Entry point to the Slack Catalyst commands
 app.post('/', (req, res) => {
   console.log("Request body:"+req.body);
   let text = req.body.text;
   console.log("Request body:"+req.body.response_url);
   console.log("Request body:"+text);
-  
-  var url = 'http://catalyst.host.com/bots'
-  var username = 'username'
-  var password = 'password'
+
+  var url = 'https://neocatalyst.rlcatalyst.com'
+  var username = 'Admin2'
+  var password = 'pass@123'
 
   var data = '';
-  var executorBotId = '';
+  var executorBotData = '';
+
+	var executorBotName = '';
+  var executorBotParams = '';
 
   if(text.includes('help')){
     text = 'help'
   }else if(text.includes('executeBot')){
-    executorBotId = text.match(/executeBot (.+)/i);
-    console.log("executeBotId:"+executorBotId[1]);
+    executorBotData = text.match(/executeBot (.+)/i);
+    console.log("executeBotId:"+executorBotData[1]);
+		var tmp = executorBotData[1]
+		executorBotName = tmp.split('(')[0]
+    executorBotParams = tmp.slice(tmp.indexOf('(')+1, tmp.indexOf(')'))
+    console.log('executorBotName: '+executorBotName)
+		console.log('executorBotParams: '+executorBotParams)
     text = 'executeBot';
   }
 
@@ -63,9 +73,19 @@ app.post('/', (req, res) => {
         };
         //var auth_token = getCatalystAuthToken(url, username, password);
         getCatalystAuthToken(url, username, password,function(err, result){
+					if(err){
+						console.log("Error in getCatalystAuthToken")
+						return
+					}
           var auth_token = result;
-          console.log('Autosc:;'+auth_token);
-          postBotList(req.body.response_url,url,auth_token);
+          console.log('Auth token:'+auth_token);
+          postBotList(req.body.response_url,url,auth_token,function(error,res){
+               if(error){
+								 console.log("Error in postBotList")
+								 return
+							 }
+							 console.log("Success!")
+					});
       });
         break;
     case 'executeBot':
@@ -74,19 +94,25 @@ app.post('/', (req, res) => {
           text: 'Executing bot:'
         };
 
-        if(!executorBotId[1]){
+        if(!executorBotData[1]){
           data.text = 'Please provide bot ID'
         }else{
             getCatalystAuthToken(url, username, password,function(err, result){
             var auth_token = result;
-            postBotExecute(req.body.response_url,auth_token,url,executorBotId[1]);
+            postBotExecute(req.body.response_url,auth_token,url,executorBotName,executorBotParams,function(error,res){
+							if(error) {
+								console.error(error)
+								return
+							}
+							console.log(res)
+						});
           });
         }
         break;
     case 'help':
         data = {
           response_type : 'in_channel',
-          text: 'Commands avaiable: /catalyst listBots,  /catalyst executeBot <BotId>'
+          text: 'Commands available: /catalyst listBots,  /catalyst executeBot <BotName> (InputParamters)'
         };
         break;
     default:
@@ -99,88 +125,206 @@ app.post('/', (req, res) => {
   res.send(data);
 });
 
+//Description:: This function gets authentication token to interact with Catalyst
+//Parameters::
+//  url: Catalyst URL
+//  username: Catalyst username
+//  password: Catalyst password
 function getCatalystAuthToken(url, username, password,callback){
   var auth_token = '';
+	url = url+'/auth/signin'
   console.log(url+", "+username)
   var options = { method: 'POST',
-    url: url+'/auth/signin',
+    url: url,
     headers:
      { 'content-type': 'application/json' },
     body: { username: username, pass: password, authType: 'token' },
     json: true };
 
   request(options, function (error, response, body) {
-    if(error) callback(error, null);
-
+    if(error) {
+			console.log('error::'+error)
+			callback(error, null);
+			return;
+		}
+    console.log('response:'+response)
     auth_token = body.token;
     console.log("Authenticated Successfully " + auth_token);
 
     callback(null, auth_token);
-    //return auth_token;
+    return
   });
 }
 
+//Description:: This function gets Bot list from Catalyst and posts to the Slack
+//Parameters::
+//  response_url: Slack URL that comes part of the request and can post back the response within 30minutes.
+//  url: Catalyst URL
+//  auth_token: Catalyst auth_token obtaines from getCatalystAuthToken()
 function postBotList(response_url,url,auth_token,callback){
+	url = url+'/bots'
+  console.log('Firing url:'+url)
+
   var options = { method: 'GET',
-    url: url+'/bots',
-    headers:
-     { //'postman-token': '3eb058ea-7ae7-3352-adbf-a02a55adb745',
-       //'cache-control': 'no-cache',
-       'x-catalyst-auth': auth_token,
-       'content-type': 'application/json' },
-  //  body: { username: 'Admin2', pass: 'pass@123', authType: 'token' },
-    json: true };
-
-  request(options, function (error, response, body) {
-    if(error) callback(error, null);
-
-    console.log("Gettting bots:"+body.bots);
-
-    var botList = body.bots;
-
-    var bots = [];
-    for (var i = 0; i < botList.length; i++) {
-      bots.push(botList[i].botName+':'+botList[i].botId+'\n')
-    }
-
-    var data = "Bot List:\n"+bots;
-    post(response_url, data);
-
-    //callback(null, "Success");
-  });
-}
-
-function postBotExecute(response_url,auth_token,url,botId,callback){
-  console.log("PostBotExecute::"+botId);
-  var url = 'http://neocatalyst.rlcatalyst.com/bots/'+botId+'/execute'
-  console.log(url);
-
-  var options = { method: 'POST',
     url: url,
     headers:
-     { //'postman-token': '3eb058ea-7ae7-3352-adbf-a02a55adb745',
-       //'cache-control': 'no-cache',
-       'x-catalyst-auth': auth_token,
+     {'x-catalyst-auth': auth_token,
        'content-type': 'application/json' },
   //  body: { username: 'Admin2', pass: 'pass@123', authType: 'token' },
     json: true };
 
   request(options, function (error, response, body) {
-    if(error) callback(error, null);
+    if(error) {
+			console.error(error)
+			callback(error, null);
+			return
+    }
 
-    console.log("Execute bot Response :"+body.botId);
+		if(body.bots){
+			console.log("Gettting bots:");
+	    var botList = body.bots;
+	    var bots = "";
+			bots += "S.No \t : \tBot Name\t : \tBot Type\t : \tInput Parameters\n"
+			bots += "--------------------------------------------------------------------------------\n"
 
-    var data = "Successfully triggered bot execution";
-    post(response_url, data);
+	    for (var i = 0; i < botList.length; i++) {
+				var botConfig = botList[i].botConfig
+				//console.log('BotName:'+botList[i].botName + '\n')
 
-    //return callback(null, "Success");
+				if(botConfig && botConfig.taskType){
+          //console.log(' --tastType:'+botConfig.taskType)
+					var attributes = ''
+					if(botConfig.taskType == 'chef'){
+						attributes = botConfig.attributes
+						//console.log('  --chef:' + attributes)
+					}else if (botConfig.taskType == 'jenkins') {
+            attributes = botConfig.parameterized
+						//console.log('  --jenkins:' + attributes)
+					}else if (botConfig.taskType == 'script') {
+            attributes = botConfig.scriptDetails[0].scriptParameters
+						//console.log('  --script:' + attributes)
+					}
+
+				if(attributes && attributes.length>0){
+				  var attr = []
+
+					for(var j = 0; j < attributes.length; j++){
+						if(botConfig.taskType == 'script'){
+              attr.push(attributes[j].paramDesc)
+						}else{
+							attr.push(attributes[j].name)
+						}
+					}
+
+					bots += (i+1) + '\t:\t' + botList[i].botName+'\t:\t'+botConfig.taskType+'\t:\t'+attr.toString()+' \n'
+			  }else{
+					bots += (i+1) + '\t:\t' + botList[i].botName+'\t:\t'+botConfig.taskType+'\t:\t'+'No Input Parameters \n'
+				}
+			 }else{
+				 bots += (i+1) + '\t:\t' + botList[i].botName+'\t:\t'+ 'None' +'\t:\t'+'No Input Parameters \n'
+			 }
+	    }
+
+	    var data = "Bot List:\n"+bots;
+	    postToSlack(response_url, data);
+
+	    callback(null, "Success");
+	 }else{
+		 console.log("No bots found in the responce body");
+		 callback("No Bots Found", null);
+		 return
+	 }
   });
 }
 
-function post(response_url, data){
+//Description:: This function triggers Catalyst bot execution and posts the response to the Slack
+//Parameters::
+//  response_url: Slack URL that comes part of the request and can post back the response within 30minutes.
+//  auth_token: Catalyst auth_token obtaines from getCatalystAuthToken()
+//  url: Catalyst URL
+//  executorBotName: Bot Name to be executed
+//  executorBotParams: Input parameters that Bot accepts to execute
+function postBotExecute(response_url,auth_token,url,executorBotName,executorBotParams,callback){
+	executorBotName = executorBotName.trim();
+	executorBotParams = executorBotParams.split(",")
+  console.log("PostBotExecute::"+executorBotName);
+  console.log("executorBotParams::"+executorBotParams);
+
+ //http://neocatalyst.rlcatalyst.com/bots?filterBy=botName:Servicenow Ticket Creation
+  var filterURL = url + '/bots?filterBy=botName:' + executorBotName
+
+	console.log('filterURL:' + filterURL)
+
+	var options = { method: 'GET',
+		url: filterURL,
+		headers:
+		 {'x-catalyst-auth': auth_token,
+			 'content-type': 'application/json' },
+		json: true };
+
+	request(options, function (error, response, body) {
+		if(error) {
+			console.error(error)
+			postToSlack(response_url, "Catalyst is down");
+			callback(error, null);
+			return
+		}
+
+		if(!body.bots[0].botId){
+			console.log("No Bot with Name:" + executorBotName);
+			return;
+		}
+		var botId = body.bots[0].botId
+		console.log('Bot ID::' + botId)
+
+    var jsonBody = {};
+		jsonBody.scriptParams = body.bots[0].botConfig.scriptDetails
+
+		if(executorBotParams){
+			console.log("In json formatting")
+			var params = jsonBody.scriptParams[0].scriptParameters
+      for( var i=0; i<params.length; i++){
+				console.log(params[i].paramVal+':'+executorBotParams[i])
+        params[i].paramVal = executorBotParams[i]
+			}
+		}
+		var executeURL = url+'/bots/'+botId+'/execute'
+	  console.log(executeURL);
+		console.log('jsonBody:' + JSON.stringify(jsonBody))
+
+	  var options = { method: 'POST',
+	    url: executeURL,
+	    headers:
+	     { 'x-catalyst-auth': auth_token,
+	       'content-type': 'application/json' },
+	    body: jsonBody,
+	    json: true };
+
+	  request(options, function (error, response, body) {
+			if(error) {
+				console.error(error)
+				callback(error, null);
+				return
+			}
+
+	    console.log("Execute bot Response :"+body.botId);
+
+	    var data = "Successfully triggered bot execution";
+	    postToSlack(response_url, data);
+
+	    callback(null, "Success")
+		});
+  });
+}
+
+//Description:: Posts the response back to Slack
+//Parameters::
+//   response_url: Slack URL that comes part of the request and can post back the response within 30minutes.
+//   data: Any response string you want to show in Slack
+function postToSlack(response_url, data){
     var options = { method: 'POST',
       url: response_url,
-      body: { response_type : 'in_channel', text: "Response::"+data },
+      body: { response_type : 'in_channel', text: data },
       json: true };
 
     request(options, function (error, response, body) {
